@@ -43,7 +43,8 @@ then
     RANLIB=""
     LIBS="-lpthread -lglut -lGLU -lGL -lXi -lX11 -lm $GST_LIBS"
     CONFIG="AR_INPUT_GSTREAMER"
-    CFLAG="$CFLAG" # debug mode off
+    CFLAG="$CFLAG"    # debug mode off
+    # CFLAG="$CFLAG -g" # debug mode on
 elif [ "$E" = "IRIX" ]
 then
     VIDEO_DRIVER="VideoSGI"
