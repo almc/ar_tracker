@@ -22,7 +22,7 @@ include(ExternalProject)
 ExternalProject_Add(
   artoolkit
   SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/artoolkit
-  CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/artoolkit/configure --prefix=${CMAKE_CURRENT_SOURCE_DIR}/artoolkit
+  CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/artoolkit/conf --prefix=${CMAKE_CURRENT_SOURCE_DIR}/artoolkit
   PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/artoolkit
   BUILD_COMMAND make
   BUILD_IN_SOURCE 1
