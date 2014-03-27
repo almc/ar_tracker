@@ -37,7 +37,7 @@ int             count         = 0;
 int             xsize, ysize;
 ARParam         cparam;
 
-#define MIN_CERTAINTY           0.1
+#define MIN_CERTAINTY           0.5
 #define NMARKERS                6
 #define AR_TO_ROS               0.001
 
