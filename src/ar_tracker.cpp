@@ -1,32 +1,16 @@
-// #include "ros/ros.h"
-#include "std_msgs/String.h"
-#include <sstream>
-
-
 #include <ros/ros.h>
 #include <ros/package.h>
 #include <ros/console.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf/transform_broadcaster.h>
-// #include <image_transport/image_transport.h>
 #include <sensor_msgs/CameraInfo.h>
+#include <std_msgs/String.h>
 #include <visualization_msgs/Marker.h>
 #include <resource_retriever/retriever.h>
-
 #include <ar_tracker/ARMarker.h>
 
-// #ifdef _WIN32
-// #include <windows.h>
-// #endif
-// #include <stdio.h>
-// #include <stdlib.h>
-// #ifndef __APPLE__
 #include <GL/gl.h>
 #include <GL/glut.h>
-// #else
-// #include <OpenGL/gl.h>
-// #include <GLUT/glut.h>
-// #endif
 #include <AR/gsub.h>
 #include <AR/video.h>
 #include <AR/param.h>
@@ -34,6 +18,7 @@
 
 // #include <stdio.h>
 // #include <stdlib.h>
+#include <sstream>
 #include <signal.h>
 
 // Define the function to be called when ctrl-c (SIGINT) signal is sent to process
@@ -45,20 +30,20 @@ void signal_callback_handler(int signum)
    exit(signum);
 }
 
-char           *vconf = const_cast<char*>("");
+char           *vconf         = const_cast<char*>("");
+char           *cparam_name   = const_cast<char*>("data/camera_para.dat");
+int             thresh        = 100;	// 100
+int             count         = 0;
 int             xsize, ysize;
-int             thresh = 100;	// 100
-int             count = 0;
-char           *cparam_name    = const_cast<char*>("data/camera_para.dat");
 ARParam         cparam;
 
-#define MIN_CERTAINTY 0.7
-#define NMARKERS 6
-const double AR_TO_ROS = 0.001;
+#define MIN_CERTAINTY           0.1
+#define NMARKERS                6
+#define AR_TO_ROS               0.001
 
 // const char     *patt_name[NMARKERS]   = {"data/robot/patt.hiro", "data/robot/patt.kanji", "data/robot/patt.sample1", "data/robot/patt.sample2"};
-const char     *patt_name[NMARKERS]   = {"data/multi/patt.letter_a", "data/multi/patt.letter_b", "data/multi/patt.letter_c", "data/multi/patt.letter_d", "data/multi/patt.letter_f", "data/multi/patt.letter_g"};
-// const char     *patt_name[NMARKERS]   = {"data/multi/patt.letter_a", "data/multi/patt.letter_b"};
+const char     *patt_name[NMARKERS]   = {"data/multi/patt.letter_a", "data/multi/patt.letter_b", "data/multi/patt.letter_c",
+                                         "data/multi/patt.letter_d", "data/multi/patt.letter_f", "data/multi/patt.letter_g"};
 int             patt_id[NMARKERS];
 double          patt_width            = 80.0; // 80
 double          patt_center[2]        = {0.0, 0.0};
@@ -67,15 +52,14 @@ ARMarkerInfo    marker_data[NMARKERS];
 
 static void   init(void);
 static void   cleanup(void);
-static void   keyEvent( unsigned char key, int x, int y);
+static void   keyEvent(unsigned char key, int x, int y);
 static void   mainLoop(void);
-static void   draw( void );
+static void   draw(void);
 
-
-int ros_count = 0;
-bool publishVisualMarkers = true;
-bool publishTf = true;
-bool reverse_transform = false;
+int  ros_count            = 0;
+bool publishVisualMarkers = false;
+bool publishTf            = true;
+bool reverseTransform     = false;
 
 ros::Publisher tracker_pub;
 ros::Publisher arMarkerPub;
@@ -83,10 +67,9 @@ ros::Publisher rvizMarkerPub;
 tf::TransformBroadcaster *broadcaster_ptr;
 visualization_msgs::Marker rvizMarker;
 
-
 int main(int argc, char **argv)
 {
-	// Register signal and signal handler
+	// register signal and signal handler
 	signal(SIGINT, signal_callback_handler);
 
 	ros::init(argc, argv, "talker");
@@ -96,33 +79,28 @@ int main(int argc, char **argv)
 
 	tracker_pub = n.advertise<std_msgs::String>("marker_tracker", 1000);
 	arMarkerPub = n.advertise<ar_tracker::ARMarker>("ar_pose_marker", 0);
-	if(publishVisualMarkers) {
+	if (publishVisualMarkers)
 		rvizMarkerPub = n.advertise<visualization_msgs::Marker>("visualization_marker", 0);
-	}
-
-	// ros::Rate loop_rate(10);
 
 	glutInit(&argc, argv);
 	init();
 
     arVideoCapStart();
-    argMainLoop( NULL, keyEvent, mainLoop );
+    argMainLoop(NULL, keyEvent, mainLoop);
 
 	return (0);
 }
 
-
-static void   keyEvent( unsigned char key, int x, int y)
+static void keyEvent(unsigned char key, int x, int y)
 {
-    /* quit if the ESC key is pressed */
-    if( key == 0x1b ) {
+    if (key == 0x1b)			// esc
+    {
         printf("*** %f (frame/sec)\n", (double)count/arUtilTimer());
         cleanup();
         exit(0);
     }
 }
 
-/* main loop */
 static void mainLoop(void)
 {
     ARUint8         *dataPtr;
@@ -130,19 +108,21 @@ static void mainLoop(void)
     int             marker_num;
     int             j, k;
 
-    /* grab a vide frame */
-    if( (dataPtr = (ARUint8 *)arVideoGetImage()) == NULL ) {
+    /* grab a video frame */
+    if ((dataPtr = (ARUint8 *)arVideoGetImage()) == NULL)
+    {
         arUtilSleep(2);
         return;
     }
-    if( count == 0 ) arUtilTimerReset();
+    if (count == 0) arUtilTimerReset();
     count++;
 
     argDrawMode2D();
-    argDispImage( dataPtr, 0,0 );
+    argDispImage(dataPtr, 0,0);
 
     /* detect the markers in the video frame */
-    if( arDetectMarker(dataPtr, thresh, &marker_info, &marker_num) < 0 ) {
+    if (arDetectMarker(dataPtr, thresh, &marker_info, &marker_num) < 0)
+    {
         cleanup();
         exit(0);
     }
@@ -155,53 +135,61 @@ static void mainLoop(void)
     // printf("Found %d number of markers\n", marker_num);
 
     // double confidence_markers[NMARKERS];
-    for (j = 0; j < NMARKERS; j++) {
+    for (j = 0; j < NMARKERS; j++)
+    {
 	    marker_data[j].cf = 0.0;
 	    // confidence_markers[j] = 0.0;
     }
 
     // fill up the NMARKERS array with data
     int i = 0;
-    for( i = 0; i < NMARKERS; i++) {
-	    for( j = 0; j < marker_num; j++ ) {
-		    if( patt_id[i] == marker_info[j].id ) {
+    for (i = 0; i < NMARKERS; i++)
+    {
+	    for (j = 0; j < marker_num; j++)
+	    {
+		    if (patt_id[i] == marker_info[j].id)
+		    {
 			    arGetTransMat(&marker_info[j], patt_center, patt_width, patt_trans);
-			    if (marker_data[i].cf < marker_info[j].cf) {
+			    if (marker_data[i].cf < marker_info[j].cf)
+			    {
 				    marker_data[i] = marker_info[j];
 				    // std::cout << "marker: " << marker_data[i].id
 				    //           << " conf: " << marker_data[i].cf << std::endl;
 			    }
 			    k = 1;
-			    /* if( k == -1 ) k = j; */
-			    /* else if( marker_info[k].cf < marker_info[j].cf ) k = j; */
+			    /* if (k == -1) k = j; */
+			    /* else if (marker_info[k].cf < marker_info[j].cf) k = j; */
 		    }
 	    }
     }
     // early exit due to no markers found
-    if( k == -1 ) {
+    if (k == -1)
+    {
         argSwapBuffers();
         return;
     }
     // display the cubes on the scree according to the transformation
 
-    for ( i = 0; i < NMARKERS; i++) {
-    // for ( j = 0; j < marker_num; j++) {
+    for (i = 0; i < NMARKERS; i++)
+    {
 	    /* get the transformation between the marker and the real camera */
-	    if (marker_data[i].cf > MIN_CERTAINTY) {
+	    if (marker_data[i].cf > MIN_CERTAINTY)
+	    {
 		    arGetTransMat(&marker_data[i], patt_center, patt_width, patt_trans);
 		    draw();
 	    }
-	    // arGetTransMat(&marker_info[j], patt_center, patt_width, patt_trans);
-	    // draw();
     }
     argSwapBuffers();
 
     // publish data in ros topic
-    if (ros::ok()) {
+    if (ros::ok())
+    {
 	    // std_msgs::String msg;
 	    // std::stringstream ss;
-	    for ( i = 0; i < NMARKERS; i++) {
-		    if (marker_data[i].cf > MIN_CERTAINTY) {
+	    for (i = 0; i < NMARKERS; i++)
+	    {
+		    if (marker_data[i].cf > MIN_CERTAINTY)
+		    {
 			    arGetTransMat(&marker_data[i], patt_center, patt_width, patt_trans);
 			    // ss << "Marker ID: " << marker_data[i].id << " center: " << patt_center[0] << "," << patt_center[1]
 			    //    << " width: " << patt_width << " trans(x,y,z): " << patt_trans[0][3] << "/" << patt_trans[1][3] << std::endl;
@@ -225,8 +213,6 @@ static void mainLoop(void)
 
 			    ROS_INFO(" QUAT: Pos x: %3.5f  y: %3.5f  z: %3.5f", pos[0], pos[1], pos[2]);
 			    ROS_INFO("     Quat qx: %3.5f qy: %3.5f qz: %3.5f qw: %3.5f", quat[0], quat[1], quat[2], quat[3]);
-
-
 
 			    // **** publish the marker --------------------
 			    ar_tracker::ARMarker ar_pose_marker;
@@ -254,9 +240,9 @@ static void mainLoop(void)
 			    tf::Quaternion rotation (quat[0], quat[1], quat[2], quat[3]);
 			    tf::Vector3 origin (pos[0], pos[1], pos[2]);
 			    tf::Transform t (rotation, origin);
-			    if(publishTf)
+			    if (publishTf)
 			    {
-				    if(reverse_transform)
+				    if (reverseTransform)
 				    {
 					    tf::StampedTransform markerToCam (t.inverse(), ros::Time::now(), patt_name[i], patt_name[i]); //image_msg->header.frame_id);
 					    broadcaster_ptr->sendTransform(markerToCam);
@@ -270,7 +256,7 @@ static void mainLoop(void)
 
 
 			    // **** publish visual marker --------------------
-			    if(publishVisualMarkers)
+			    if (publishVisualMarkers)
 			    {
 				    tf::Vector3 markerOrigin (0, 0, 0.25 * patt_width * AR_TO_ROS);
 				    tf::Transform m (tf::Quaternion::getIdentity (), markerOrigin);
@@ -310,36 +296,39 @@ static void mainLoop(void)
     }
 }
 
-static void init( void )
+static void init(void)
 {
     ARParam  wparam;
 
     /* open the video path */
-    if( arVideoOpen( vconf ) < 0 ) exit(0);
+    if (arVideoOpen(vconf) < 0) exit(0);
     /* find the size of the window */
-    if( arVideoInqSize(&xsize, &ysize) < 0 ) exit(0);
+    if (arVideoInqSize(&xsize, &ysize) < 0) exit(0);
     printf("Image size (x,y) = (%d,%d)\n", xsize, ysize);
 
     /* set the initial camera parameters */
-    if( arParamLoad(cparam_name, 1, &wparam) < 0 ) {
+    if (arParamLoad(cparam_name, 1, &wparam) < 0)
+    {
         printf("Camera parameter load error !!\n");
         exit(0);
     }
-    arParamChangeSize( &wparam, xsize, ysize, &cparam );
-    arInitCparam( &cparam );
+    arParamChangeSize(&wparam, xsize, ysize, &cparam);
+    arInitCparam(&cparam);
     printf("*** Camera Parameter ***\n");
-    arParamDisp( &cparam );
+    arParamDisp(&cparam);
 
     int i = 0;
-    for (i = 0; i < NMARKERS; i++) {
-	    if( (patt_id[i]=arLoadPatt(patt_name[i])) < 0 ) {
+    for (i = 0; i < NMARKERS; i++)
+    {
+	    if ((patt_id[i]=arLoadPatt(patt_name[i])) < 0)
+	    {
 		    printf("pattern load error !!\n");
 		    exit(0);
 	    }
     }
 
     /* open the graphics window */
-    argInit( &cparam, 1.0, 0, 0, 0, 0 );
+    argInit(&cparam, 1.0, 0, 0, 0, 0);
 }
 
 /* cleanup function called when program exits */
@@ -350,7 +339,7 @@ static void cleanup(void)
     argCleanup();
 }
 
-static void draw( void )
+static void draw(void)
 {
     double    gl_para[16];
     GLfloat   mat_ambient[]     = {0.0, 0.0, 1.0, 1.0};
@@ -361,8 +350,8 @@ static void draw( void )
     GLfloat   lightZeroColor[]  = {0.9, 0.9, 0.9, 0.1};
 
     argDrawMode3D();
-    argDraw3dCamera( 0, 0 );
-    glClearDepth( 1.0 );
+    argDraw3dCamera(0, 0);
+    glClearDepth(1.0);
     glClear(GL_DEPTH_BUFFER_BIT);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -370,7 +359,7 @@ static void draw( void )
     /* load the camera transformation matrix */
     argConvGlpara(patt_trans, gl_para);
     glMatrixMode(GL_MODELVIEW);
-    glLoadMatrixd( gl_para );
+    glLoadMatrixd(gl_para);
 
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
@@ -381,11 +370,11 @@ static void draw( void )
     glMaterialfv(GL_FRONT, GL_SHININESS, mat_flash_shiny);
     glMaterialfv(GL_FRONT, GL_AMBIENT, mat_ambient);
     glMatrixMode(GL_MODELVIEW);
-    glTranslatef( 0.0, 0.0, 25.0 );
+    glTranslatef(0.0, 0.0, 25.0);
     glutSolidCube(50.0);
-    glDisable( GL_LIGHTING );
+    glDisable(GL_LIGHTING);
 
-    glDisable( GL_DEPTH_TEST );
+    glDisable(GL_DEPTH_TEST);
 }
 
 
